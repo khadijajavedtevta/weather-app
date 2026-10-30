@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyGlass — Weather</title>
+    <style>
+        :root{
+          --deep-sky:#0F6CBD;
+          --light-blue:#5BC0EB;
+          --white:#FFFFFF;
+          --soft-blue:#EAF6FF;
+          --navy:#102A43;
+          --glass-bg: rgba(255,255,255,0.16);
+          --glass-border: rgba(255,255,255,0.35);
+          --glass-bg-strong: rgba(255,255,255,0.24);
+          --text-ink: var(--navy);
+          --text-sub: rgba(16,42,67,0.65);
+          --sky-a: var(--deep-sky);
+          --sky-b: var(--light-blue);
+          --sky-c: var(--soft-blue);
+          --transition-sky: 1.2s cubic-bezier(.4,0,.2,1);
+        }
+
+        *{margin:0;padding:0;box-sizing:border-box;}
+
+        html,body{height:100%;}
+
+        body{
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "Helvetica Neue", Arial, sans-serif;
+          min-height:100vh;
+          overflow-x:hidden;
+          color: var(--text-ink);
+          position:relative;
+          background: linear-gradient(180deg, var(--sky-a) 0%, var(--sky-b) 55%, var(--sky-c) 100%);
+          transition: background var(--transition-sky);
+        }
+
+        body.night{ --text-ink:#EAF6FF; --text-sub:rgba(234,246,255,0.68); }
+
+        /* ---------- Sky layers ---------- */
+        #sky-stage{
+          position:fixed; inset:0; z-index:0; overflow:hidden; pointer-events:none;
+        }
+        .sky-layer{ position:absolute; inset:0; opacity:0; transition:opacity var(--transition-sky); }
+        .sky-layer.active{ opacity:1; }
+
+        /* Sunny layer */
+        .sun-orb{
+          position:absolute; top:8%; right:12%; width:180px; height:180px; border-radius:50%;
+          background: radial-gradient(circle at 35% 35%, #FFFDE7, #FFE082 45%, rgba(255,224,130,0) 72%);
+          filter: blur(0.5px);
+          box-shadow: 0 0 90px 40px rgba(255,224,130,0.55);
+          animation: pulse-sun 6s ease-in-out infinite;
+        }
+        @keyframes pulse-sun{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.06);} }
+        .ray{
+          position:absolute; top:8%; right:12%; width:2px; height:340px; transform-origin: top center;
+          background: linear-gradient(to bottom, rgba(255,255,255,0.35), rgba(255,255,255,0));
+          animation: rotate-rays 60s linear infinite;
+        }
+        @keyframes rotate-rays{ from{ transform: rotate(0deg);} to{ transform: rotate(360deg);} }
+
+        .cloud{
+          position:absolute; background: rgba(255,255,255,0.75); border-radius:100px;
+          filter: blur(0.5px);
+        }
+        .cloud::before, .cloud::after{ content:""; position:absolute; background:inherit; border-radius:50%; }
+        .cloud.c1{ width:140px; height:44px; top:18%; left:8%; animation: drift 40s linear infinite; }
+        .cloud.c1::before{ width:70px; height:70px; top:-34px; left:16px; }
+        .cloud.c1::after{ width:56px; height:56px; top:-24px; left:70px; }
+        .cloud.c2{ width:100px; height:34px; top:30%; left:60%; opacity:.85; animation: drift 55s linear infinite reverse; }
+        .cloud.c2::before{ width:50px; height:50px; top:-24px; left:12px; }
+        .cloud.c2::after{ width:40px; height:40px; top:-16px; left:50px; }
+        @keyframes drift{ from{ transform: translateX(-10vw);} to{ transform: translateX(110vw);} }
+
+        /* Rain layer */
+        .rain-cloud{
+          position:absolute; width:220px; height:70px; top:6%; left:20%;
+          background: rgba(80,100,120,0.55); border-radius:100px; filter: blur(1px);
+        }
+        .rain-cloud::before, .rain-cloud::after{ content:""; position:absolute; background:inherit; border-radius:50%; }
+        .rain-cloud::before{ width:100px; height:100px; top:-50px; left:20px; }
+        .rain-cloud::after{ width:90px; height:90px; top:-40px; left:110px; }
+        .rain-cloud.two{ top:20%; left:60%; transform:scale(0.7); opacity:.8; }
+        .drop{
+          position:absolute; width:2px; height:18px; background: linear-gradient(to bottom, rgba(234,246,255,0), rgba(234,246,255,0.75));
+          animation: fall linear infinite;
+        }
+        @keyframes fall{ from{ transform: translateY(-10vh);} to{ transform: translateY(110vh);} }
+
+        /* Storm layer */
+        .storm-cloud{
+          position:absolute; width:280px; height:90px; top:8%; left:14%;
+          background: rgba(35,42,58,0.85); border-radius:100px; filter: blur(1px);
+        }
+        .storm-cloud::before, .storm-cloud::after{ content:""; position:absolute; background:inherit; border-radius:50%; }
+        .storm-cloud::before{ width:120px; height:120px; top:-58px; left:24px; }
+        .storm-cloud::after{ width:100px; height:100px; top:-46px; left:130px; }
+        .storm-cloud.two{ top:22%; left:55%; transform:scale(0.75); opacity:.85; }
+        .bolt{
+          position:absolute; top:14%; left:40%; width:40px; opacity:0;
+          animation: flash 4.5s ease-in-out infinite;
+          filter: drop-shadow(0 0 8px rgba(255,247,180,0.9));
+        }
+        .bolt.b2{ left:65%; top:20%; animation-delay: 2.2s; }
+        @keyframes flash{ 0%,92%,100%{ opacity:0;} 93%{ opacity:1;} 94%{ opacity:0.2;} 95%{ opacity:1;} 97%{ opacity:0;} }
+
+        /* Snow layer */
+        .flake{
+          position:absolute; top:-5%; color:rgba(255,255,255,0.95); font-size:14px;
+          animation: snow-fall linear infinite;
+        }
+        @keyframes snow-fall{
+          from{ transform: translateY(-10vh) translateX(0) rotate(0deg);}
+          to{ transform: translateY(110vh) translateX(30px) rotate(200deg);}
+        }
+
+        /* Night layer */
+        .star{ position:absolute; background:#fff; border-radius:50%; animation: twinkle 3s ease-in-out infinite; }
+        @keyframes twinkle{ 0%,100%{ opacity:.25;} 50%{ opacity:1;} }
+        .moon{
+          position:absolute; top:10%; right:14%; width:90px; height:90px; border-radius:50%;
+          background: radial-gradient(circle at 38% 35%, #FDFBF0, #E9E3C9 60%, #cfc9ad 100%);
+          box-shadow: 0 0 60px 20px rgba(233,227,201,0.35);
+        }
+
+        /* ---------- Layout ---------- */
+        .app{ position:relative; z-index:1; max-width:480px; margin:0 auto; padding:20px 18px 60px; min-height:100vh; }
+
+        header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; gap:10px; }
+        .brand{ display:flex; align-items:center; gap:8px; font-weight:800; font-size:18px; letter-spacing:-0.02em; }
+        .brand .dot{ width:8px;height:8px;border-radius:50%; background: var(--white); box-shadow:0 0 10px rgba(255,255,255,0.9); }
+
+        .unit-toggle{
+          display:flex; background: var(--glass-bg); border:1px solid var(--glass-border); border-radius:999px; padding:3px; backdrop-filter: blur(14px);
+        }
+        .unit-toggle button{
+          border:none; background:transparent; padding:6px 12px; border-radius:999px; font-weight:700; font-size:12.5px; cursor:pointer; color: var(--text-ink); opacity:.6; transition:.25s;
+        }
+        .unit-toggle button.active{ background: var(--white); color: var(--deep-sky); opacity:1; }
+
+        .search-row{ display:flex; align-items:center; gap:8px; margin-bottom:16px; }
+        .location-pill{
+          flex:1; display:flex; align-items:center; gap:8px; background: var(--glass-bg); border:1px solid var(--glass-border);
+          border-radius:16px; padding:10px 14px; backdrop-filter: blur(14px);
+        }
+        .location-pill input{
+          border:none; background:transparent; outline:none; width:100%; font-size:14px; font-weight:600; color: var(--text-ink);
+        }
+        .location-pill input::placeholder{ color: var(--text-sub); }
+
+        .glass{
+          background: var(--glass-bg); border:1px solid var(--glass-border); backdrop-filter: blur(18px) saturate(140%);
+          -webkit-backdrop-filter: blur(18px) saturate(140%);
+          border-radius:26px; box-shadow: 0 8px 32px rgba(16,42,67,0.15), inset 0 1px 0 rgba(255,255,255,0.4);
+        }
+
+        .hero{ padding:28px 24px 22px; text-align:center; margin-bottom:16px; position:relative; overflow:hidden; }
+        .hero .place{ font-size:15px; font-weight:700; letter-spacing:0.02em; opacity:.85; }
+        .hero .place span{ opacity:.65; font-weight:600; }
+        .hero .temp-row{ display:flex; align-items:center; justify-content:center; gap:14px; margin:6px 0 2px; }
+        .hero .icon{ font-size:56px; line-height:1; filter: drop-shadow(0 6px 14px rgba(16,42,67,0.25)); }
+        .hero .temp{ font-size:76px; font-weight:800; letter-spacing:-0.04em; line-height:1; }
+        .hero .cond{ font-size:16px; font-weight:700; opacity:.9; margin-bottom:6px; }
+        .hero .feels{ font-size:13px; opacity:.7; font-weight:600; }
+        .hi-lo{ display:flex; justify-content:center; gap:16px; margin-top:14px; font-size:13px; font-weight:700; }
+        .hi-lo .hi{ color:#E8570B; }
+        .hi-lo .lo{ color: var(--deep-sky); }
+        body.night .hi-lo .lo{ color: var(--light-blue); }
+
+        .scene-picker{ display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; margin-bottom:18px; scrollbar-width:none; }
+        .scene-picker::-webkit-scrollbar{ display:none; }
+        .scene-btn{
+          flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:14px; font-size:12.5px; font-weight:700;
+          border:1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(12px); cursor:pointer; color:var(--text-ink); opacity:.7; transition:.2s;
+        }
+        .scene-btn.active{ opacity:1; background: var(--glass-bg-strong); box-shadow: 0 4px 14px rgba(16,42,67,0.18); }
+
+        .section-title{ font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.06em; opacity:.7; margin: 4px 2px 10px; }
+
+        .info-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-bottom:20px; }
+        .info-card{ padding:14px 10px; text-align:center; }
+        .info-card .ic{ font-size:20px; margin-bottom:6px; }
+        .info-card .val{ font-size:17px; font-weight:800; letter-spacing:-0.02em; }
+        .info-card .lab{ font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; opacity:.6; margin-top:2px; }
+
+        .hourly{ display:flex; gap:10px; overflow-x:auto; padding:14px 10px; margin-bottom:20px; scrollbar-width:none; }
+        .hourly::-webkit-scrollbar{ display:none; }
+        .hour-item{ flex:0 0 auto; width:58px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:6px; }
+        .hour-item .t{ font-size:11.5px; font-weight:700; opacity:.7; }
+        .hour-item .i{ font-size:22px; }
+        .hour-item .d{ font-size:14px; font-weight:800; }
+
+        .daily{ display:flex; flex-direction:column; gap:8px; }
+        .day-row{ display:flex; align-items:center; padding:13px 16px; gap:10px; }
+        .day-row .d-name{ width:44px; font-size:13.5px; font-weight:800; }
+        .day-row .d-icon{ font-size:19px; width:30px; text-align:center; }
+        .day-row .d-bar{ flex:1; height:5px; border-radius:4px; background: rgba(16,42,67,0.12); position:relative; overflow:hidden; margin: 0 6px; }
+        .day-row .d-bar span{ position:absolute; inset:0; border-radius:4px; background: linear-gradient(90deg, var(--light-blue), #F0A63A); }
+        .day-row .d-lo{ font-size:13px; font-weight:700; opacity:.55; width:30px; text-align:right; }
+        .day-row .d-hi{ font-size:13.5px; font-weight:800; width:34px; text-align:right; }
+
+        footer{ text-align:center; font-size:11px; opacity:.5; margin-top:22px; font-weight:600; }
+
+        @media (max-width:360px){
+          .hero .temp{ font-size:64px; }
+          .info-grid{ gap:8px; }
+        }
+    </style>
+</head>
+<body class="sunny">
+
+<div id="sky-stage">
+    <!-- Sunny -->
+    <div class="sky-layer" data-scene="sunny">
+        <div class="sun-orb"></div>
+        <div class="ray" style="transform:rotate(0deg)"></div>
+        <div class="ray" style="transform:rotate(45deg)"></div>
+        <div class="ray" style="transform:rotate(90deg)"></div>
+        <div class="ray" style="transform:rotate(135deg)"></div>
+        <div class="cloud c1"></div>
+        <div class="cloud c2"></div>
+    </div>
+
+    <!-- Rain -->
+    <div class="sky-layer" data-scene="rain">
+        <div class="rain-cloud"></div>
+        <div class="rain-cloud two"></div>
+        <div id="rain-drops"></div>
+    </div>
+
+    <!-- Storm -->
+    <div class="sky-layer" data-scene="storm">
+        <div class="storm-cloud"></div>
+        <div class="storm-cloud two"></div>
+        <svg class="bolt" viewBox="0 0 24 40"><polygon points="14,0 2,22 11,22 8,40 22,16 12,16" fill="#FFF3B0"/></svg>
+        <svg class="bolt b2" viewBox="0 0 24 40"><polygon points="14,0 2,22 11,22 8,40 22,16 12,16" fill="#FFF3B0"/></svg>
+        <div id="storm-drops"></div>
+    </div>
+
+    <!-- Snow -->
+    <div class="sky-layer" data-scene="snow" id="snow-layer"></div>
+
+    <!-- Night -->
+    <div class="sky-layer" data-scene="night" id="night-layer">
+        <div class="moon"></div>
+    </div>
+</div>
+
+<div class="app">
+    <header>
+        <div class="brand"><span>🌤️</span> SkyGlass</div>
+        <div class="unit-toggle">
+            <button id="btn-c" class="active">°C</button>
+            <button id="btn-f">°F</button>
+        </div>
+    </header>
+
+    <div class="search-row">
+        <div class="location-pill">
+            <span>📍</span>
+            <input type="text" placeholder="Lahore, Pakistan" />
+        </div>
+        <div class="location-pill" style="flex:0 0 auto; padding:10px;">🔍</div>
+    </div>
+
+    <div class="glass hero">
+        <div class="place">Lahore, <span>Pakistan</span></div>
+        <div class="temp-row">
+            <div class="icon" id="hero-icon">☀️</div>
+            <div class="temp"><span id="temp-val">32</span>°</div>
+        </div>
+        <div class="cond" id="hero-cond">Sunny</div>
+        <div class="feels">Feels like <span id="feels-val">35</span>°</div>
+        <div class="hi-lo">
+            <span class="hi">High <span id="hi-val">36</span>°</span>
+            <span class="lo">Low <span id="lo-val">27</span>°</span>
+        </div>
+    </div>
+
+    <div class="scene-picker" id="scene-picker">
+        <button class="scene-btn active" data-scene="sunny">☀️ Sunny</button>
+        <button class="scene-btn" data-scene="rain">🌧️ Rain</button>
+        <button class="scene-btn" data-scene="storm">⛈️ Storm</button>
+        <button class="scene-btn" data-scene="snow">❄️ Snow</button>
+        <button class="scene-btn" data-scene="night">🌙 Night</button>
+    </div>
+
+    <div class="section-title">Conditions</div>
+    <div class="info-grid">
+        <div class="glass info-card"><div class="ic">💧</div><div class="val">48%</div><div class="lab">Humidity</div></div>
+        <div class="glass info-card"><div class="ic">💨</div><div class="val">14 km/h</div><div class="lab">Wind</div></div>
+        <div class="glass info-card"><div class="ic">👁️</div><div class="val">10 km</div><div class="lab">Visibility</div></div>
+        <div class="glass info-card"><div class="ic">☀️</div><div class="val">7</div><div class="lab">UV Index</div></div>
+        <div class="glass info-card"><div class="ic">🌅</div><div class="val">5:32 AM</div><div class="lab">Sunrise</div></div>
+        <div class="glass info-card"><div class="ic">🌇</div><div class="val">6:48 PM</div><div class="lab">Sunset</div></div>
+    </div>
+
+    <div class="section-title">Hourly Forecast</div>
+    <div class="glass hourly">
+        <div class="hour-item"><div class="t">Now</div><div class="i">☀️</div><div class="d">32°</div></div>
+        <div class="hour-item"><div class="t">7 PM</div><div class="i">🌤️</div><div class="d">30°</div></div>
+        <div class="hour-item"><div class="t">8 PM</div><div class="i">🌙</div><div class="d">29°</div></div>
+        <div class="hour-item"><div class="t">9 PM</div><div class="i">🌙</div><div class="d">28°</div></div>
+        <div class="hour-item"><div class="t">10 PM</div><div class="i">🌙</div><div class="d">27°</div></div>
+        <div class="hour-item"><div class="t">11 PM</div><div class="i">🌙</div><div class="d">26°</div></div>
+        <div class="hour-item"><div class="t">12 AM</div><div class="i">🌙</div><div class="d">25°</div></div>
+    </div>
+
+    <div class="section-title">7-Day Forecast</div>
+    <div class="glass" style="padding:8px;">
+        <div class="daily" id="daily-list"></div>
+    </div>
+
+    <footer>SkyGlass · Weather that feels like weather</footer>
+</div>
+
+<script>
+    const F2C = f => Math.round((f-32)*5/9);
+    const C2F = c => Math.round(c*9/5+32);
+    let unit = 'C';
+
+    // ---- Temperature data (base, Celsius) ----
+    const base = { temp:32, feels:35, hi:36, lo:27 };
+
+    function renderTemps(){
+      const conv = unit==='C' ? (v=>v) : C2F;
+      document.getElementById('temp-val').textContent = conv(base.temp);
+      document.getElementById('feels-val').textContent = conv(base.feels);
+      document.getElementById('hi-val').textContent = conv(base.hi);
+      document.getElementById('lo-val').textContent = conv(base.lo);
+      document.querySelectorAll('.hour-item .d').forEach(el=>{
+        const c = parseInt(el.dataset.c || el.textContent);
+        if(!el.dataset.c) el.dataset.c = c;
+        el.textContent = conv(parseInt(el.dataset.c)) + '°';
+      });
+      document.querySelectorAll('.d-hi, .d-lo').forEach(el=>{
+        if(!el.dataset.c) el.dataset.c = parseInt(el.textContent);
+        el.textContent = conv(parseInt(el.dataset.c)) + '°';
+      });
+    }
+
+    document.getElementById('btn-c').onclick = ()=>{ unit='C'; toggleUnitBtn(); };
+    document.getElementById('btn-f').onclick = ()=>{ unit='F'; toggleUnitBtn(); };
+    function toggleUnitBtn(){
+      document.getElementById('btn-c').classList.toggle('active', unit==='C');
+      document.getElementById('btn-f').classList.toggle('active', unit==='F');
+      renderTemps();
+    }
+
+    // ---- 7-day forecast ----
+    const week = [
+      {d:'Thu', icon:'☀️', hi:36, lo:27},
+      {d:'Fri', icon:'🌤️', hi:35, lo:26},
+      {d:'Sat', icon:'🌧️', hi:31, lo:25},
+      {d:'Sun', icon:'⛈️', hi:30, lo:24},
+      {d:'Mon', icon:'🌤️', hi:33, lo:25},
+      {d:'Tue', icon:'☀️', hi:35, lo:26},
+      {d:'Wed', icon:'🌙', hi:32, lo:24},
+    ];
+    const maxHi = Math.max(...week.map(w=>w.hi));
+    const minLo = Math.min(...week.map(w=>w.lo));
+    const dailyList = document.getElementById('daily-list');
+    week.forEach(w=>{
+      const row = document.createElement('div');
+      row.className = 'day-row';
+      const left = ((w.lo-minLo)/(maxHi-minLo))*100;
+      const width = ((w.hi-w.lo)/(maxHi-minLo))*100;
+      row.innerHTML = `
+        <div class="d-name">${w.d}</div>
+        <div class="d-icon">${w.icon}</div>
+        <div class="d-lo" data-c="${w.lo}">${w.lo}°</div>
+        <div class="d-bar"><span style="left:${left}%; width:${width}%; right:auto; position:absolute;"></span></div>
+        <div class="d-hi" data-c="${w.hi}">${w.hi}°</div>
+      `;
+      dailyList.appendChild(row);
+    });
+    // fix bar span positioning (override 'inset:0')
+    document.querySelectorAll('.d-bar span').forEach(s=>{ s.style.inset='auto'; s.style.top=0; s.style.bottom=0; });
+
+    // ---- Scene switching ----
+    const scenes = {
+      sunny: { icon:'☀️', cond:'Sunny', vars:{'--sky-a':'#0F6CBD','--sky-b':'#5BC0EB','--sky-c':'#EAF6FF'} },
+      rain:  { icon:'🌧️', cond:'Rainy', vars:{'--sky-a':'#3A5B76','--sky-b':'#6E93AC','--sky-c':'#C7D9E3'} },
+      storm: { icon:'⛈️', cond:'Thunderstorm', vars:{'--sky-a':'#111826','--sky-b':'#26344a','--sky-c':'#495A72'} },
+      snow:  { icon:'❄️', cond:'Snowy', vars:{'--sky-a':'#AFC9DC','--sky-b':'#DCEAF3','--sky-c':'#FFFFFF'} },
+      night: { icon:'🌙', cond:'Clear Night', vars:{'--sky-a':'#0B1220','--sky-b':'#102A43','--sky-c':'#1B3A5C'} },
+    };
+
+    function setScene(name){
+      document.querySelectorAll('.sky-layer').forEach(l=> l.classList.toggle('active', l.dataset.scene===name));
+      document.querySelectorAll('.scene-btn').forEach(b=> b.classList.toggle('active', b.dataset.scene===name));
+      const s = scenes[name];
+      document.getElementById('hero-icon').textContent = s.icon;
+      document.getElementById('hero-cond').textContent = s.cond;
+      Object.entries(s.vars).forEach(([k,v])=> document.body.style.setProperty(k,v));
+      document.body.classList.toggle('night', name==='storm' || name==='night');
+    }
+    document.getElementById('scene-picker').addEventListener('click', e=>{
+      const btn = e.target.closest('.scene-btn');
+      if(btn) setScene(btn.dataset.scene);
+    });
+
+    // ---- Generate rain drops ----
+    function makeDrops(containerId, count){
+      const c = document.getElementById(containerId);
+      if(!c) return;
+      let html='';
+      for(let i=0;i<count;i++){
+        const left = Math.random()*100;
+        const dur = 0.6 + Math.random()*0.6;
+        const delay = Math.random()*2;
+        html += `<div class="drop" style="left:${left}%; animation-duration:${dur}s; animation-delay:${delay}s;"></div>`;
+      }
+      c.innerHTML = html;
+    }
+    makeDrops('rain-drops', 40);
+    makeDrops('storm-drops', 55);
+
+    // ---- Generate snowflakes ----
+    const snowLayer = document.getElementById('snow-layer');
+    let snowHTML = '';
+    for(let i=0;i<35;i++){
+      const left = Math.random()*100;
+      const dur = 6 + Math.random()*8;
+      const delay = Math.random()*8;
+      const size = 10 + Math.random()*10;
+      snowHTML += `<div class="flake" style="left:${left}%; animation-duration:${dur}s; animation-delay:${delay}s; font-size:${size}px;">❄</div>`;
+    }
+    snowLayer.innerHTML = snowHTML;
+
+    // ---- Generate stars ----
+    const nightLayer = document.getElementById('night-layer');
+    let starHTML = '<div class="moon"></div>';
+    for(let i=0;i<60;i++){
+      const top = Math.random()*70;
+      const left = Math.random()*100;
+      const size = 1 + Math.random()*2;
+      const delay = Math.random()*3;
+      starHTML += `<div class="star" style="top:${top}%; left:${left}%; width:${size}px; height:${size}px; animation-delay:${delay}s;"></div>`;
+    }
+    nightLayer.innerHTML = starHTML;
+
+    renderTemps();
+</script>
+</body>
+</html>
